@@ -1,18 +1,45 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>為替レート</title>
+    <title>リアルタイム為替レート</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        table { margin: 20px auto; border-collapse: collapse; width: 80%; }
-        th, td { border: 1px solid #ddd; padding: 10px; }
-        th { background: #0078D7; color: white; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            margin-top: 20px;
+            color: #0078D7;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 80%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #0078D7;
+            color: white;
+        }
+        td {
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
-    <h1>為替レート情報</h1>
+    <h1>リアルタイム為替レート</h1>
     <table>
         <thead>
             <tr>
@@ -21,18 +48,50 @@
                 <th>更新日時</th>
             </tr>
         </thead>
-        <tbody>
-            <tr>
-                <td>USD/JPY</td>
-                <td>130.55</td>
-                <td>2025-01-24</td>
-            </tr>
-            <tr>
-                <td>USD/EUR</td>
-                <td>0.92</td>
-                <td>2025-01-24</td>
-            </tr>
+        <tbody id="rate-table">
+            <!-- データがここに動的に追加されます -->
         </tbody>
     </table>
+    <script>
+        // Alpha Vantage APIキーを設定
+        const API_KEY = "4RN5FDD9HWVOI5J7";
+        const PAIRS = [["USD", "JPY"], ["EUR", "USD"], ["GBP", "USD"]]; // 対象通貨ペア
+        const API_URL = "https://www.alphavantage.co/query";
+
+        // 為替データを取得する関数
+        async function fetchRates() {
+            const table = document.getElementById("rate-table");
+            table.innerHTML = ""; // テーブルを初期化
+            for (const [from, to] of PAIRS) {
+                const response = await fetch(`${API_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${from}&to_currency=${to}&apikey=${API_KEY}`);
+                const data = await response.json();
+                if (data["Realtime Currency Exchange Rate"]) {
+                    const rate = data["Realtime Currency Exchange Rate"]["5. Exchange Rate"];
+                    const lastRefreshed = data["Realtime Currency Exchange Rate"]["6. Last Refreshed"];
+                    const row = `
+                        <tr>
+                            <td>${from}/${to}</td>
+                            <td>${parseFloat(rate).toFixed(2)}</td>
+                            <td>${lastRefreshed}</td>
+                        </tr>
+                    `;
+                    table.innerHTML += row;
+                } else {
+                    table.innerHTML += `
+                        <tr>
+                            <td>${from}/${to}</td>
+                            <td>データ取得失敗</td>
+                            <td>---</td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+
+        // 初回データ取得
+        fetchRates();
+        // 30秒ごとに更新
+        setInterval(fetchRates, 30000);
+    </script>
 </body>
 </html>
