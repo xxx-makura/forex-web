@@ -3,26 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>リアルタイム為替レート</title>
+    <title>為替レートとテクニカル分析</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f4f4f4;
             margin: 0;
             padding: 0;
+            text-align: center;
+            background-color: #f4f4f4;
         }
         h1 {
-            margin-top: 20px;
             color: #0078D7;
         }
         table {
             margin: 20px auto;
             border-collapse: collapse;
-            width: 80%;
+            width: 90%;
             background: white;
-            border-radius: 8px;
-            overflow: hidden;
         }
         th, td {
             border: 1px solid #ddd;
@@ -33,13 +30,17 @@
             background-color: #0078D7;
             color: white;
         }
-        td {
-            font-size: 1rem;
+        canvas {
+            margin: 20px auto;
+            display: block;
         }
     </style>
 </head>
 <body>
-    <h1>リアルタイム為替レート</h1>
+    <h1>為替レートとテクニカル分析</h1>
+
+    <!-- リアルタイム為替レートテーブル -->
+    <h2>リアルタイム為替レート</h2>
     <table>
         <thead>
             <tr>
@@ -48,50 +49,100 @@
                 <th>更新日時</th>
             </tr>
         </thead>
-        <tbody id="rate-table">
-            <!-- データがここに動的に追加されます -->
-        </tbody>
+        <tbody id="rate-table"></tbody>
     </table>
+
+    <!-- テクニカル分析セクション -->
+    <h2>テクニカル分析</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>時間足</th>
+                <th>25SMA</th>
+                <th>50SMA</th>
+                <th>100SMA</th>
+                <th>200SMA</th>
+                <th>シグナル</th>
+            </tr>
+        </thead>
+        <tbody id="technical-table"></tbody>
+    </table>
+
+    <!-- ボリンジャーバンドと過去データのグラフ -->
+    <h2>過去データのグラフ</h2>
+    <canvas id="chart" width="400" height="200"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/technicalindicators@3.0.0/dist/browser.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Alpha Vantage APIキーを設定
         const API_KEY = "4RN5FDD9HWVOI5J7";
-        const PAIRS = [["USD", "JPY"], ["EUR", "USD"], ["GBP", "USD"]]; // 対象通貨ペア
+        const SYMBOL = "USDJPY";
+        const TIMEFRAME = "5min"; // 時間足の設定
         const API_URL = "https://www.alphavantage.co/query";
 
-        // 為替データを取得する関数
-        async function fetchRates() {
-            const table = document.getElementById("rate-table");
-            table.innerHTML = ""; // テーブルを初期化
-            for (const [from, to] of PAIRS) {
-                const response = await fetch(`${API_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=${from}&to_currency=${to}&apikey=${API_KEY}`);
-                const data = await response.json();
-                if (data["Realtime Currency Exchange Rate"]) {
-                    const rate = data["Realtime Currency Exchange Rate"]["5. Exchange Rate"];
-                    const lastRefreshed = data["Realtime Currency Exchange Rate"]["6. Last Refreshed"];
-                    const row = `
-                        <tr>
-                            <td>${from}/${to}</td>
-                            <td>${parseFloat(rate).toFixed(2)}</td>
-                            <td>${lastRefreshed}</td>
-                        </tr>
-                    `;
-                    table.innerHTML += row;
-                } else {
-                    table.innerHTML += `
-                        <tr>
-                            <td>${from}/${to}</td>
-                            <td>データ取得失敗</td>
-                            <td>---</td>
-                        </tr>
-                    `;
-                }
+        // 移動平均線、ボリンジャーバンドを計算する関数
+        async function fetchTechnicalData() {
+            const response = await fetch(`${API_URL}?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=${TIMEFRAME}&apikey=${API_KEY}`);
+            const data = await response.json();
+            const timeSeries = data[`Time Series (${TIMEFRAME})`];
+            const closePrices = Object.values(timeSeries).map(entry => parseFloat(entry["4. close"])).slice(0, 200).reverse();
+
+            // 移動平均線
+            const sma25 = new technicalindicators.SMA({ period: 25, values: closePrices });
+            const sma50 = new technicalindicators.SMA({ period: 50, values: closePrices });
+            const sma100 = new technicalindicators.SMA({ period: 100, values: closePrices });
+            const sma200 = new technicalindicators.SMA({ period: 200, values: closePrices });
+
+            // ボリンジャーバンド
+            const bb = new technicalindicators.BollingerBands({
+                period: 20,
+                values: closePrices,
+                stdDev: 2
+            });
+
+            // ゴールデンクロスとデッドクロスの判定
+            let signal = "なし";
+            if (sma25[sma25.length - 1] > sma50[sma50.length - 1] && sma25[sma25.length - 2] <= sma50[sma50.length - 2]) {
+                signal = "ゴールデンクロス";
+            } else if (sma25[sma25.length - 1] < sma50[sma50.length - 1] && sma25[sma25.length - 2] >= sma50[sma50.length - 2]) {
+                signal = "デッドクロス";
             }
+
+            // テクニカル分析テーブルに表示
+            const table = document.getElementById("technical-table");
+            table.innerHTML = `
+                <tr>
+                    <td>${TIMEFRAME}</td>
+                    <td>${sma25[sma25.length - 1].toFixed(2)}</td>
+                    <td>${sma50[sma50.length - 1].toFixed(2)}</td>
+                    <td>${sma100[sma100.length - 1].toFixed(2)}</td>
+                    <td>${sma200[sma200.length - 1].toFixed(2)}</td>
+                    <td>${signal}</td>
+                </tr>
+            `;
+
+            // グラフ表示
+            const ctx = document.getElementById("chart").getContext("2d");
+            new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: Array(closePrices.length).fill(""),
+                    datasets: [
+                        { label: "Close Prices", data: closePrices, borderColor: "blue", fill: false },
+                        { label: "Upper Band", data: bb.upper, borderColor: "green", fill: false },
+                        { label: "Lower Band", data: bb.lower, borderColor: "red", fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
         }
 
-        // 初回データ取得
-        fetchRates();
-        // 30秒ごとに更新
-        setInterval(fetchRates, 30000);
+        // 初回データ取得と定期更新
+        fetchTechnicalData();
+        setInterval(fetchTechnicalData, 60000); // 1分ごとに更新
     </script>
 </body>
 </html>
