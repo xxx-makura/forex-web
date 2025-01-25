@@ -72,30 +72,31 @@
     </table>
 
     <script>
-        const API_KEY = "4RN5FDD9HWVOI5J7"; // あなたのAlpha Vantage APIキー
-        const API_URL = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=EURJPY&interval=60min&apikey=${API_KEY}`;
-        let requestCount = 0;
-        const MAX_REQUESTS_PER_DAY = 500;
+        const EXCHANGE_RATE_API_KEY = "IUSD6H0TY4KQ77GV"; // 1つ目のAPIキー（為替レート用）
+        const TECHNICAL_ANALYSIS_API_KEY = "4RN5FDD9HWVOI5J7"; // 2つ目のAPIキー（テクニカル分析用）
+        const MAX_REQUESTS_PER_DAY = 500; // APIの1日あたりの最大リクエスト数
+
+        // リクエスト間隔を計算（1日500回 → 約3分ごと）
+        const REQUEST_INTERVAL_MS = (24 * 60 * 60 * 1000) / MAX_REQUESTS_PER_DAY; // 288000ms（3分20秒）
+
+        let exchangeRateRequestCount = 0;
+        let technicalAnalysisRequestCount = 0;
 
         // 為替レート取得
         async function fetchExchangeRate() {
-            if (requestCount >= MAX_REQUESTS_PER_DAY) {
-                console.log("1日のリクエスト上限に達しました。");
+            if (exchangeRateRequestCount >= MAX_REQUESTS_PER_DAY) {
+                console.log("為替レートAPIの1日のリクエスト上限に達しました。");
                 return;
             }
 
+            const API_URL = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=EURJPY&interval=60min&apikey=${EXCHANGE_RATE_API_KEY}`;
             try {
-                const response = await fetch(`${API_URL}`);
+                const response = await fetch(API_URL);
                 const data = await response.json();
-                console.log("APIレスポンス:", data);
-
-                if (data["Note"]) {
-                    console.error("API制限に達しました:", data["Note"]);
-                    return;
-                }
+                console.log("為替レートAPIレスポンス:", data);
 
                 if (!data["Time Series (60min)"]) {
-                    console.error("Time Series データがありません:", data);
+                    console.error("為替レートデータがありません:", data);
                     return;
                 }
 
@@ -113,36 +114,41 @@
                     </tr>
                 `;
 
-                // テクニカル分析の処理
-                fetchTechnicalData(timeSeries);
-                requestCount++;
+                exchangeRateRequestCount++;
             } catch (error) {
-                console.error("データ取得中にエラーが発生しました:", error);
+                console.error("為替レート取得中にエラーが発生しました:", error);
             }
         }
 
-        // テクニカル分析データ処理
-        async function fetchTechnicalData(timeSeries) {
+        // テクニカル分析データ取得
+        async function fetchTechnicalAnalysis() {
+            if (technicalAnalysisRequestCount >= MAX_REQUESTS_PER_DAY) {
+                console.log("テクニカル分析APIの1日のリクエスト上限に達しました。");
+                return;
+            }
+
+            const API_URL = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=EURJPY&interval=60min&apikey=${TECHNICAL_ANALYSIS_API_KEY}`;
             try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                console.log("テクニカル分析APIレスポンス:", data);
+
+                if (!data["Time Series (60min)"]) {
+                    console.error("テクニカル分析データがありません:", data);
+                    return;
+                }
+
+                const timeSeries = data["Time Series (60min)"];
                 const closePrices = Object.values(timeSeries)
                     .map(entry => parseFloat(entry["4. close"]))
                     .slice(0, 200)
                     .reverse(); // 最新から過去の順に並べ替え
 
-                console.log("取得したクローズ価格:", closePrices);
-
-                // テクニカル指標の計算
                 const sma25 = new technicalindicators.SMA({ period: 25, values: closePrices });
                 const sma50 = new technicalindicators.SMA({ period: 50, values: closePrices });
                 const sma100 = new technicalindicators.SMA({ period: 100, values: closePrices });
                 const sma200 = new technicalindicators.SMA({ period: 200, values: closePrices });
 
-                console.log("25期間SMA:", sma25);
-                console.log("50期間SMA:", sma50);
-                console.log("100期間SMA:", sma100);
-                console.log("200期間SMA:", sma200);
-
-                // シグナル判定
                 let signal = "なし";
                 if (sma25[sma25.length - 1] > sma50[sma50.length - 1] && sma25[sma25.length - 2] <= sma50[sma50.length - 2]) {
                     signal = "ゴールデンクロス";
@@ -161,14 +167,20 @@
                         <td>${signal}</td>
                     </tr>
                 `;
+
+                technicalAnalysisRequestCount++;
             } catch (error) {
                 console.error("テクニカル分析処理中にエラーが発生しました:", error);
             }
         }
 
-        // データを取得（5分ごとにリクエスト）
-        setInterval(() => fetchExchangeRate(), 300000); // 300,000ms = 5分
+        // それぞれのリクエストをスケジューリング
+        setInterval(fetchExchangeRate, REQUEST_INTERVAL_MS); // 為替レート用
+        setInterval(fetchTechnicalAnalysis, REQUEST_INTERVAL_MS); // テクニカル分析用
+
+        // 初回リクエスト
         fetchExchangeRate();
+        fetchTechnicalAnalysis();
     </script>
 </body>
 </html>
