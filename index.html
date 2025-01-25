@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>為替レートとテクニカル分析</title>
+    <title>ユーロ円為替レートとテクニカル分析</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -33,9 +33,11 @@
             color: white;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/regenerator-runtime/0.13.7/runtime.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/technicalindicators@3.0.0/dist/browser.js"></script>
 </head>
 <body>
-    <h1>為替レートとテクニカル分析</h1>
+    <h1>ユーロ円為替レートとテクニカル分析</h1>
 
     <!-- 為替レートのテーブル -->
     <table id="rate-table">
@@ -60,6 +62,7 @@
                 <th>25期間SMA</th>
                 <th>50期間SMA</th>
                 <th>100期間SMA</th>
+                <th>200期間SMA</th>
                 <th>シグナル</th>
             </tr>
         </thead>
@@ -68,39 +71,78 @@
         </tbody>
     </table>
 
-    <script src="https://cdn.jsdelivr.net/npm/technicalindicators@3.0.0/dist/browser.js"></script>
     <script>
-        const API_KEY = "4RN5FDD9HWVOI5J7";
-        const API_URL = "https://www.alphavantage.co/query";
+        const API_KEY = "4RN5FDD9HWVOI5J7"; // あなたのAlpha Vantage APIキー
+        const API_URL = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=EURJPY&interval=60min&apikey=${API_KEY}`;
+        let requestCount = 0;
+        const MAX_REQUESTS_PER_DAY = 500;
 
-        async function fetchTechnicalData() {
+        // 為替レート取得
+        async function fetchExchangeRate() {
+            if (requestCount >= MAX_REQUESTS_PER_DAY) {
+                console.log("1日のリクエスト上限に達しました。");
+                return;
+            }
+
             try {
-                const response = await fetch(`${API_URL}?function=TIME_SERIES_INTRADAY&symbol=USDJPY&interval=5min&apikey=${API_KEY}`);
+                const response = await fetch(`${API_URL}`);
                 const data = await response.json();
                 console.log("APIレスポンス:", data);
 
-                const timeSeries = data["Time Series (5min)"];
-                if (!timeSeries) {
-                    console.error("Time Series データがありません");
+                if (data["Note"]) {
+                    console.error("API制限に達しました:", data["Note"]);
                     return;
                 }
 
+                if (!data["Time Series (60min)"]) {
+                    console.error("Time Series データがありません:", data);
+                    return;
+                }
+
+                const timeSeries = data["Time Series (60min)"];
+                const latestTime = Object.keys(timeSeries)[0];
+                const latestData = timeSeries[latestTime];
+                const rate = parseFloat(latestData["4. close"]).toFixed(2);
+
+                const table = document.querySelector("#rate-table tbody");
+                table.innerHTML = `
+                    <tr>
+                        <td>EUR/JPY</td>
+                        <td>${rate}</td>
+                        <td>${latestTime}</td>
+                    </tr>
+                `;
+
+                // テクニカル分析の処理
+                fetchTechnicalData(timeSeries);
+                requestCount++;
+            } catch (error) {
+                console.error("データ取得中にエラーが発生しました:", error);
+            }
+        }
+
+        // テクニカル分析データ処理
+        async function fetchTechnicalData(timeSeries) {
+            try {
                 const closePrices = Object.values(timeSeries)
                     .map(entry => parseFloat(entry["4. close"]))
-                    .slice(0, 50)
-                    .reverse(); // 最新から過去の順に変換
+                    .slice(0, 200)
+                    .reverse(); // 最新から過去の順に並べ替え
+
                 console.log("取得したクローズ価格:", closePrices);
 
                 // テクニカル指標の計算
                 const sma25 = new technicalindicators.SMA({ period: 25, values: closePrices });
                 const sma50 = new technicalindicators.SMA({ period: 50, values: closePrices });
                 const sma100 = new technicalindicators.SMA({ period: 100, values: closePrices });
+                const sma200 = new technicalindicators.SMA({ period: 200, values: closePrices });
 
                 console.log("25期間SMA:", sma25);
                 console.log("50期間SMA:", sma50);
                 console.log("100期間SMA:", sma100);
+                console.log("200期間SMA:", sma200);
 
-                // シグナルの判定
+                // シグナル判定
                 let signal = "なし";
                 if (sma25[sma25.length - 1] > sma50[sma50.length - 1] && sma25[sma25.length - 2] <= sma50[sma50.length - 2]) {
                     signal = "ゴールデンクロス";
@@ -108,23 +150,25 @@
                     signal = "デッドクロス";
                 }
 
-                // テーブルに表示
-                const technicalTable = document.getElementById("technical-table");
+                const technicalTable = document.querySelector("#technical-table tbody");
                 technicalTable.innerHTML = `
                     <tr>
-                        <td>5分足</td>
+                        <td>1時間足</td>
                         <td>${sma25[sma25.length - 1]?.toFixed(2) || "N/A"}</td>
                         <td>${sma50[sma50.length - 1]?.toFixed(2) || "N/A"}</td>
                         <td>${sma100[sma100.length - 1]?.toFixed(2) || "N/A"}</td>
+                        <td>${sma200[sma200.length - 1]?.toFixed(2) || "N/A"}</td>
                         <td>${signal}</td>
                     </tr>
                 `;
             } catch (error) {
-                console.error("エラーが発生しました:", error);
+                console.error("テクニカル分析処理中にエラーが発生しました:", error);
             }
         }
 
-        fetchTechnicalData();
+        // データを取得（5分ごとにリクエスト）
+        setInterval(() => fetchExchangeRate(), 300000); // 300,000ms = 5分
+        fetchExchangeRate();
     </script>
 </body>
 </html>
