@@ -19,10 +19,8 @@
         table {
             margin: 20px auto;
             border-collapse: collapse;
-            width: 80%;
+            width: 90%;
             background: white;
-            border-radius: 8px;
-            overflow: hidden;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         th, td {
@@ -34,13 +32,12 @@
             background-color: #0078D7;
             color: white;
         }
-        td {
-            font-size: 1.2rem;
-        }
     </style>
 </head>
 <body>
     <h1>為替レートとテクニカル分析</h1>
+
+    <!-- 為替レートのテーブル -->
     <table id="rate-table">
         <thead>
             <tr>
@@ -50,41 +47,84 @@
             </tr>
         </thead>
         <tbody>
-            <!-- データがここに挿入されます -->
+            <!-- リアルタイムレートのデータが挿入されます -->
         </tbody>
     </table>
 
+    <!-- テクニカル分析のテーブル -->
+    <h2>テクニカル分析</h2>
+    <table id="technical-table">
+        <thead>
+            <tr>
+                <th>時間足</th>
+                <th>25期間SMA</th>
+                <th>50期間SMA</th>
+                <th>100期間SMA</th>
+                <th>シグナル</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- テクニカルデータが挿入されます -->
+        </tbody>
+    </table>
+
+    <script src="https://cdn.jsdelivr.net/npm/technicalindicators@3.0.0/dist/browser.js"></script>
     <script>
         const API_KEY = "4RN5FDD9HWVOI5J7";
         const API_URL = "https://www.alphavantage.co/query";
 
-        async function fetchRates() {
+        async function fetchTechnicalData() {
             try {
-                const response = await fetch(`${API_URL}?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=JPY&apikey=${API_KEY}`);
+                const response = await fetch(`${API_URL}?function=TIME_SERIES_INTRADAY&symbol=USDJPY&interval=5min&apikey=${API_KEY}`);
                 const data = await response.json();
                 console.log("APIレスポンス:", data);
-                
-                const rate = parseFloat(data["Realtime Currency Exchange Rate"]?.["5. Exchange Rate"]).toFixed(2);
-                const lastUpdated = data["Realtime Currency Exchange Rate"]?.["6. Last Refreshed"];
 
-                if (rate && lastUpdated) {
-                    const table = document.querySelector("#rate-table tbody");
-                    table.innerHTML = `
-                        <tr>
-                            <td>USD/JPY</td>
-                            <td>${rate}</td>
-                            <td>${lastUpdated}</td>
-                        </tr>
-                    `;
-                } else {
-                    console.error("データが正しく取得できませんでした:", data);
+                const timeSeries = data["Time Series (5min)"];
+                if (!timeSeries) {
+                    console.error("Time Series データがありません");
+                    return;
                 }
+
+                const closePrices = Object.values(timeSeries)
+                    .map(entry => parseFloat(entry["4. close"]))
+                    .slice(0, 50)
+                    .reverse(); // 最新から過去の順に変換
+                console.log("取得したクローズ価格:", closePrices);
+
+                // テクニカル指標の計算
+                const sma25 = new technicalindicators.SMA({ period: 25, values: closePrices });
+                const sma50 = new technicalindicators.SMA({ period: 50, values: closePrices });
+                const sma100 = new technicalindicators.SMA({ period: 100, values: closePrices });
+
+                console.log("25期間SMA:", sma25);
+                console.log("50期間SMA:", sma50);
+                console.log("100期間SMA:", sma100);
+
+                // シグナルの判定
+                let signal = "なし";
+                if (sma25[sma25.length - 1] > sma50[sma50.length - 1] && sma25[sma25.length - 2] <= sma50[sma50.length - 2]) {
+                    signal = "ゴールデンクロス";
+                } else if (sma25[sma25.length - 1] < sma50[sma50.length - 1] && sma25[sma25.length - 2] >= sma50[sma50.length - 2]) {
+                    signal = "デッドクロス";
+                }
+
+                // テーブルに表示
+                const technicalTable = document.getElementById("technical-table");
+                technicalTable.innerHTML = `
+                    <tr>
+                        <td>5分足</td>
+                        <td>${sma25[sma25.length - 1]?.toFixed(2) || "N/A"}</td>
+                        <td>${sma50[sma50.length - 1]?.toFixed(2) || "N/A"}</td>
+                        <td>${sma100[sma100.length - 1]?.toFixed(2) || "N/A"}</td>
+                        <td>${signal}</td>
+                    </tr>
+                `;
             } catch (error) {
-                console.error("データ取得中にエラーが発生しました:", error);
+                console.error("エラーが発生しました:", error);
             }
         }
 
-        fetchRates();
+        fetchTechnicalData();
     </script>
 </body>
 </html>
