@@ -4,13 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>為替レートとテクニカル分析</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/regenerator-runtime/0.13.7/runtime.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/technicalindicators@3.0.0/dist/browser.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            color: #0078D7;
+            margin-top: 20px;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 80%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #0078D7;
+            color: white;
+        }
+        td {
+            font-size: 1.2rem;
+        }
+    </style>
 </head>
 <body>
     <h1>為替レートとテクニカル分析</h1>
     <table id="rate-table">
-        <tr><th>通貨ペア</th><th>為替レート</th><th>更新日時</th></tr>
+        <thead>
+            <tr>
+                <th>通貨ペア</th>
+                <th>為替レート</th>
+                <th>更新日時</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- データがここに挿入されます -->
+        </tbody>
     </table>
 
     <script>
@@ -23,12 +64,17 @@
                 const data = await response.json();
                 console.log("APIレスポンス:", data);
                 
-                const rate = data["Realtime Currency Exchange Rate"]?.["5. Exchange Rate"];
+                const rate = parseFloat(data["Realtime Currency Exchange Rate"]?.["5. Exchange Rate"]).toFixed(2);
                 const lastUpdated = data["Realtime Currency Exchange Rate"]?.["6. Last Refreshed"];
 
                 if (rate && lastUpdated) {
-                    document.getElementById("rate-table").innerHTML += `
-                        <tr><td>USD/JPY</td><td>${rate}</td><td>${lastUpdated}</td></tr>
+                    const table = document.querySelector("#rate-table tbody");
+                    table.innerHTML = `
+                        <tr>
+                            <td>USD/JPY</td>
+                            <td>${rate}</td>
+                            <td>${lastUpdated}</td>
+                        </tr>
                     `;
                 } else {
                     console.error("データが正しく取得できませんでした:", data);
